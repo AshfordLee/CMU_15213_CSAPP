@@ -1,0 +1,29 @@
+# 忽略所有没有扩展名的文件（通常是可执行文件）
+*
+!*/
+!*.*
+
+# 忽略特定扩展名的编译文件
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# 忽略编译输出目录
+/bin/
+/build/
+/Debug/
+/Release/
+
+# 忽略特定编译器和IDE生成的文件
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln.docstates
