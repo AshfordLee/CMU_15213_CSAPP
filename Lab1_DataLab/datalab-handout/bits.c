@@ -288,7 +288,43 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+    // 1. 先把 x 统一为“正数” mask（x<0 时取反，否则不变）
+    int sign = x >> 31;
+    int mask = x ^ sign;
+
+    // 2. bits 用来累加 floor(log2(mask))
+    int bits = 0;
+    int shiftAmt;
+
+    // 看高 16 位
+    shiftAmt = (!!(mask >> 16)) << 4;  // 要么 16，要么 0
+    bits += shiftAmt;
+    mask >>= shiftAmt;
+
+    // 看高 8 位
+    shiftAmt = (!!(mask >> 8)) << 3;   // 要么 8，要么 0
+    bits += shiftAmt;
+    mask >>= shiftAmt;
+
+    // 看高 4 位
+    shiftAmt = (!!(mask >> 4)) << 2;   // 要么 4，要么 0
+    bits += shiftAmt;
+    mask >>= shiftAmt;
+
+    // 看高 2 位
+    shiftAmt = (!!(mask >> 2)) << 1;   // 要么 2，要么 0
+    bits += shiftAmt;
+    mask >>= shiftAmt;
+
+    // 看高 1 位
+    shiftAmt = !!(mask >> 1);          // 要么 1，要么 0
+    bits += shiftAmt;
+    mask >>= shiftAmt;
+
+    // 3. mask 现在要么是 0（原始 x 只有符号位，需要 1 位表示），
+    //              要么是 1（说明原 x != 0,-1，floor(log2) 计算成功）
+    // 返回：mask==0 → 1；mask!=0 → bits + 2 （+1 给 magnitude，再 +1 给符号）
+    return (!!mask) * (bits + 2) + (!mask);
 }
 //float
 /* 
