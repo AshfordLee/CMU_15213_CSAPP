@@ -165,12 +165,8 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  int intmax=~(1<<31);
-  
-  if (x==intmax)
-    return 1;
-  else
-    return 0;
+  int y=x+1;
+  return !(y^~x) & !!y;
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -181,12 +177,11 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  int mapcode=0xAAAAAAAA;
+  int mapcode=0xAA;
+  mapcode=(mapcode<<8) | mapcode;
+  mapcode=(mapcode<<16) | mapcode;
 
-  if ((x&mapcode)==mapcode)
-    return 1;
-  else
-    return 0;
+  return !((x&mapcode)^mapcode);
 }
 /* 
  * negate - return -x 
@@ -218,10 +213,8 @@ int isAsciiDigit(int x) {
   int bound1=sign1>>31;
   int bound2=sign2>>31;
 
-  if (!bound1&!bound2)
-    return 1;
-  else
-    return 0;
+  return !bound1&!bound2;
+
   
 }
 /* 
@@ -246,19 +239,14 @@ int conditional(int x, int y, int z) {
  */
 int isLessOrEqual(int x, int y) {
 
-  int x_sign=(x>>31) & 1;
-  int y_sign=(y>>31) & 1;
+  int sx=(x>>31)&1;
+  int sy=(y>>31)&1;
 
-  if (x_sign^y_sign)
-  {
-    return x_sign;
-  }
+  int diff_sign=sx^sy;
+  
+  int sd=((y+(~x+1))>>31)&1;
 
-  int equal=!(x^y);
-  int diff=x+~y;
-  int diff_sign=diff>>31;
-
-  return equal | ((!equal) & diff_sign);
+  return (diff_sign&sx)|((!diff_sign)&!sd);
 }
 //4
 /* 
@@ -288,43 +276,31 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-    // 1. 先把 x 统一为“正数” mask（x<0 时取反，否则不变）
+    // 1. 把 x 统一为“正数”：若 x<0，则 mask = ~x，否则 mask = x
     int sign = x >> 31;
     int mask = x ^ sign;
+    int nz_mask;
+    int z_mask;
+    int nonzero;
+    int zero;
 
-    // 2. bits 用来累加 floor(log2(mask))
-    int bits = 0;
-    int shiftAmt;
+    // 2. 二分法累加 floor(log2(mask))
+    int bits = 0, shiftAmt;
 
-    // 看高 16 位
-    shiftAmt = (!!(mask >> 16)) << 4;  // 要么 16，要么 0
-    bits += shiftAmt;
-    mask >>= shiftAmt;
+    shiftAmt = (!!(mask >> 16)) << 4; bits += shiftAmt; mask >>= shiftAmt;
+    shiftAmt = (!!(mask >> 8))  << 3; bits += shiftAmt; mask >>= shiftAmt;
+    shiftAmt = (!!(mask >> 4))  << 2; bits += shiftAmt; mask >>= shiftAmt;
+    shiftAmt = (!!(mask >> 2))  << 1; bits += shiftAmt; mask >>= shiftAmt;
+    shiftAmt = (!!(mask >> 1));       bits += shiftAmt; mask >>= shiftAmt;
 
-    // 看高 8 位
-    shiftAmt = (!!(mask >> 8)) << 3;   // 要么 8，要么 0
-    bits += shiftAmt;
-    mask >>= shiftAmt;
+    // 3. 构造全 1 或全 0 的掩码，替代之前的乘法
+    nonzero = !!mask;           // mask != 0 ? 1 : 0
+    nz_mask = ~nonzero + 1;     // nonzero=1 -> 0xFFFFFFFF；nonzero=0 -> 0x0
+    zero = !mask;               // mask == 0 ? 1 : 0
+    z_mask = ~zero + 1;         // zero=1 -> 0xFFFFFFFF；zero=0 -> 0x0
 
-    // 看高 4 位
-    shiftAmt = (!!(mask >> 4)) << 2;   // 要么 4，要么 0
-    bits += shiftAmt;
-    mask >>= shiftAmt;
-
-    // 看高 2 位
-    shiftAmt = (!!(mask >> 2)) << 1;   // 要么 2，要么 0
-    bits += shiftAmt;
-    mask >>= shiftAmt;
-
-    // 看高 1 位
-    shiftAmt = !!(mask >> 1);          // 要么 1，要么 0
-    bits += shiftAmt;
-    mask >>= shiftAmt;
-
-    // 3. mask 现在要么是 0（原始 x 只有符号位，需要 1 位表示），
-    //              要么是 1（说明原 x != 0,-1，floor(log2) 计算成功）
-    // 返回：mask==0 → 1；mask!=0 → bits + 2 （+1 给 magnitude，再 +1 给符号）
-    return (!!mask) * (bits + 2) + (!mask);
+    // mask != 0 时返回 bits+2；mask == 0 时返回 1
+    return (nz_mask & (bits + 2)) | (z_mask & 1);
 }
 //float
 /* 
@@ -339,7 +315,30 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+
+  unsigned sign=uf & 0x80000000;
+  unsigned exp=(uf>>23) & 0xFF;
+  unsigned frac=uf & 0x7FFFFF;
+
+  if (exp==0xFF)
+  {
+    return uf;
+  }
+
+  if (exp==0)
+  {
+    frac=frac<<1;
+    return sign | frac;
+  }
+ 
+  exp=exp+1;
+
+  if (exp==0xFF)
+  {
+    return sign | 0x7F800000;
+  }
+
+  return sign | (exp<<23) | frac;
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -354,10 +353,40 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+    // 提取符号位、指数位和尾数位
+    int sign = (uf >> 31) & 1;
+    int exp = ((uf >> 23) & 0xFF) - 127;  // 减去偏置值
+    int frac = uf & 0x7FFFFF;
+    int result;
+    
+    // 处理特殊情况
+    if (exp == 128) {  // NaN 或无穷大
+        return 0x80000000u;
+    }
+    
+    if (exp < 0) {  // 小于1的数
+        return 0;
+    }
+    
+    if (exp > 30) {  // 超出整数范围
+        return 0x80000000u;
+    }
+    
+    // 构造整数
+    result = (1 << 23) | frac;  // 添加隐含的1
+    
+    // 根据指数调整
+    if (exp < 23) {
+        result >>= (23 - exp);  // 右移
+    } else {
+        result <<= (exp - 23);  // 左移
+    }
+    
+    // 处理符号
+    return sign ? -result : result;
 }
 /* 
- * floatPower2 - Return bit-level equivalent of the expression 2.0^x
+ *   floatPower2 - Return bit-level equivalent of the expression 2.0^x
  *   (2.0 raised to the power x) for any 32-bit integer x.
  *
  *   The unsigned value that is returned should have the identical bit
@@ -370,5 +399,23 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    // 处理特殊情况
+    int exp;
+    if (x > 127) {  // 超出规格化数范围
+        return 0x7F800000;  // 返回正无穷
+    }
+    
+    if (x < -149) {  // 超出非规格化数范围
+        return 0;  // 返回0
+    }
+    
+    // 处理非规格化数
+    if (x < -126) {  // 在非规格化数范围内
+        int shift = 23 + (x + 126);  // 计算需要左移的位数
+        return 1 << shift;
+    }
+    
+    // 处理规格化数
+    exp = x + 127;  // 加上偏置值
+    return exp << 23;  // 构造浮点数表示
 }
